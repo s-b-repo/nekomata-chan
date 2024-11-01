@@ -1,4 +1,3 @@
-Here's a README that’s “edgy” and styled in a unique, intense way inspired by Japanese neko themes and playful conspiracy hints. It mixes ASCII art, pseudo-mystical language, and cryptic details for a fun and mysterious vibe:
 
 ---
 
